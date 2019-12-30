@@ -81,33 +81,32 @@ func pixel_to_grid(pixel_x, pixel_y):
 	return Vector2(new_x, new_y)
 	pass;	
 
-func is_in_grid(column, row):
-	if column >= 0 && column < width:
-		if row >= 0 && row < height:
+func is_in_grid(grid_position):
+	if grid_position.x >= 0 && grid_position.x < width:
+		if grid_position.y >= 0 && grid_position.y < height:
 			return true;
 	return false;
 
 func touch_input():
 	if Input.is_action_just_pressed("ui_touch"):
-		first_touch = get_global_mouse_position();
-		var grid_position = pixel_to_grid(first_touch.x, first_touch.y);
-		if is_in_grid(grid_position.x, grid_position.y):
+		if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)):
+			first_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
 			controlling = true;
 	if Input.is_action_just_released("ui_touch"):
-		final_touch = get_global_mouse_position();
-		var grid_position = pixel_to_grid(final_touch.x, final_touch.y);
-		if is_in_grid(grid_position.x, grid_position.y) && controlling:
-			touch_difference(pixel_to_grid(first_touch.x, first_touch.y), grid_position);
+		if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)) && controlling:
 			controlling = false;
+			final_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y);
+			touch_difference(first_touch, final_touch);
 
 func swap_pieces(column, row, direction):
 	var first_piece = all_pieces[column][row];
 	var other_piece = all_pieces[column + direction.x][row + direction.y];
-	all_pieces[column][row] = other_piece;
-	all_pieces[column + direction.x][row + direction.y] = first_piece;
-	first_piece.move(grid_to_pixel(column + direction.x, row + direction.y));
-	other_piece.move(grid_to_pixel(column, row));
-	find_matches()
+	if first_piece != null && other_piece != null:
+		all_pieces[column][row] = other_piece;
+		all_pieces[column + direction.x][row + direction.y] = first_piece;
+		first_piece.move(grid_to_pixel(column + direction.x, row + direction.y));
+		other_piece.move(grid_to_pixel(column, row));
+		find_matches()
 
 func touch_difference(grid_1, grid_2):
 	var difference = grid_2 - grid_1;
@@ -150,4 +149,15 @@ func find_matches():
 							all_pieces[i][j].dim();
 							all_pieces[i][j + 1].matched = true;
 							all_pieces[i][j + 1].dim();
-	pass;
+	get_parent().get_node("destroy_timer").start();
+
+func destroy_matched():
+	for i in width:
+		for j in height:
+			if all_pieces[i][j] != null:
+				if all_pieces[i][j].matched:
+					all_pieces[i][j].queue_free()
+					all_pieces[i][j] = null;
+
+func _on_destroy_timer_timeout():
+	destroy_matched()
