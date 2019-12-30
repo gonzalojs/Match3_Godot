@@ -1,5 +1,9 @@
 extends Node2D
 
+# State Machine
+enum {wait, move}
+var state
+
 # Grid Variables
 export (int) var width
 export (int) var height
@@ -31,6 +35,7 @@ var controlling = false
 
 # Called when the node enters the scene tree for the first time.
 func _ready():
+	state = move
 	randomize()
 	all_pieces = make_2d_array()
 	spawn_pieces()
@@ -57,8 +62,8 @@ func spawn_pieces():
 				piece = possible_pieces[rand].instance()
 			# Instance that piece from the array
 			add_child(piece)
-			piece.position = grid_to_pixel(i, j - y_offset )
-			piece.move(grid_to_pixel(i, j))
+			piece.position = grid_to_pixel(i, j)
+			all_pieces[i][j] = piece
 
 func match_at(i, j, color):
 	if i > 1:
@@ -103,6 +108,7 @@ func touch_input():
 func swap_pieces(column, row, direction):
 	var first_piece = all_pieces[column][row]
 	var other_piece = all_pieces[column + direction.x][row + direction.y]
+	state = wait
 	if first_piece != null && other_piece != null:
 		all_pieces[column][row] = other_piece
 		all_pieces[column + direction.x][row + direction.y] = first_piece
@@ -126,7 +132,8 @@ func touch_difference(grid_1, grid_2):
 
 # Called every frame. 'delta' is the elapsed time since the previous frame.
 func _process(delta):
-	touch_input()
+	if state == move:
+		touch_input()
 
 func find_matches():
 	for i in width:
@@ -189,6 +196,17 @@ func refill_columns():
 				piece.position = grid_to_pixel(i, j - y_offset)
 				piece.move(grid_to_pixel(i, j))
 				all_pieces[i][j] = piece
+	after_refill()
+				
+func after_refill():
+	for i in width:
+		for j in height:
+			if all_pieces[i][j] != null:
+				if match_at(i, j, all_pieces[i][j].color):
+					find_matches()
+					get_parent().get_node("destroy_timer").start()
+					return
+	state = move
 
 func _on_destroy_timer_timeout():
 	destroy_matched()
