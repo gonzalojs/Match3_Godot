@@ -7,6 +7,8 @@ export (int) var x_start
 export (int) var y_start
 export (int) var offset
 
+export (int) var y_offset # How much above the piece start
+
 # The piece array
 var possible_pieces = [
 preload("res://Scenes/blue_piece.tscn"),
@@ -55,8 +57,8 @@ func spawn_pieces():
 				piece = possible_pieces[rand].instance()
 			# Instance that piece from the array
 			add_child(piece)
-			piece.position = grid_to_pixel(i, j)
-			all_pieces[i][j] = piece
+			piece.position = grid_to_pixel(i, j - y_offset )
+			piece.move(grid_to_pixel(i, j))
 
 func match_at(i, j, color):
 	if i > 1:
@@ -184,7 +186,8 @@ func refill_columns():
 					loops += 1
 					piece = possible_pieces[rand].instance()
 				add_child(piece)
-				piece.position = grid_to_pixel(i, j)
+				piece.position = grid_to_pixel(i, j - y_offset)
+				piece.move(grid_to_pixel(i, j))
 				all_pieces[i][j] = piece
 
 func _on_destroy_timer_timeout():
