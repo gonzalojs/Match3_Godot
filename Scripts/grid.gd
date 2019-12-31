@@ -10,8 +10,11 @@ export (int) var height
 export (int) var x_start
 export (int) var y_start
 export (int) var offset
+# How much above the piece start
+export (int) var y_offset 
 
-export (int) var y_offset # How much above the piece start
+# Obstacle Stuff
+export (PoolVector2Array) var empty_spaces
 
 # The piece array
 var possible_pieces = [
@@ -48,6 +51,13 @@ func _ready():
 	spawn_pieces()
 	# Replace with function body.
 
+func restricted_movement(place):
+	# Check empty pieces
+	for i in empty_spaces.size():
+		if empty_spaces[i] == place:
+			return true
+	return false
+
 func make_2d_array():
 	var array = []
 	for i in width:
@@ -59,18 +69,19 @@ func make_2d_array():
 func spawn_pieces():
 	for i in width:
 		for j in height:
-			# Choose a random number and store it
-			var rand = floor(rand_range(0, possible_pieces.size()))
-			var piece = possible_pieces[rand].instance()
-			var loops = 0
-			while(match_at(i, j, piece.color) && loops < 100):
-				rand = floor(rand_range(0, possible_pieces.size()))
-				loops += 1
-				piece = possible_pieces[rand].instance()
-			# Instance that piece from the array
-			add_child(piece)
-			piece.position = grid_to_pixel(i, j)
-			all_pieces[i][j] = piece
+			if !restricted_movement(Vector2(i, j)):
+				# Choose a random number and store it
+				var rand = floor(rand_range(0, possible_pieces.size()))
+				var piece = possible_pieces[rand].instance()
+				var loops = 0
+				while(match_at(i, j, piece.color) && loops < 100):
+					rand = floor(rand_range(0, possible_pieces.size()))
+					loops += 1
+					piece = possible_pieces[rand].instance()
+				# Instance that piece from the array
+				add_child(piece)
+				piece.position = grid_to_pixel(i, j)
+				all_pieces[i][j] = piece
 
 func match_at(i, j, color):
 	if i > 1:
@@ -102,15 +113,16 @@ func is_in_grid(grid_position):
 	return false
 
 func touch_input():
-	if Input.is_action_just_pressed("ui_touch"):
-		if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)):
-			first_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
-			controlling = true
-	if Input.is_action_just_released("ui_touch"):
-		if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)) && controlling:
-			controlling = false
-			final_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
-			touch_difference(first_touch, final_touch)
+	if !restricted_movement(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)):
+		if Input.is_action_just_pressed("ui_touch"):
+			if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)):
+				first_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
+				controlling = true
+		if Input.is_action_just_released("ui_touch"):
+			if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)) && controlling:
+				controlling = false
+				final_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
+				touch_difference(first_touch, final_touch)
 
 func swap_pieces(column, row, direction):
 	var first_piece = all_pieces[column][row]
@@ -201,7 +213,7 @@ func destroy_matched():
 func collapse_columns():
 	for i in width:
 		for j in height:
-			if all_pieces[i][j] == null:
+			if all_pieces[i][j] == null && !restricted_movement(Vector2(i,j)):
 				for k in range(j + 1, height):
 					if all_pieces[i][k] != null:
 						all_pieces[i][k].move(grid_to_pixel(i, j))
@@ -213,7 +225,7 @@ func collapse_columns():
 func refill_columns():
 	for i in width:
 		for j in height:
-			if all_pieces[i][j] == null:
+			if all_pieces[i][j] == null && !restricted_movement(Vector2(i,j)):
 				var rand = floor(rand_range(0, possible_pieces.size()))
 				var piece = possible_pieces[rand].instance()
 				var loops = 0
