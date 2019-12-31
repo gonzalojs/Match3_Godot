@@ -16,10 +16,13 @@ export (int) var y_offset
 # Obstacle Stuff
 export (PoolVector2Array) var empty_spaces
 export (PoolVector2Array) var ice_spaces
+export (PoolVector2Array) var lock_spaces
 
 # Obstacle Signams
 signal make_ice
 signal damage_ice
+signal make_lock
+signal damage_lock
 
 # The piece array
 var possible_pieces = [
@@ -55,11 +58,23 @@ func _ready():
 	all_pieces = make_2d_array()
 	spawn_pieces()
 	spawn_ice()
+	spawn_locks()
 
-func restricted_movement(place):
+func restricted_fill(place):
 	# Check empty pieces
-	for i in empty_spaces.size():
-		if empty_spaces[i] == place:
+	if is_in_array(empty_spaces, place):
+		return true
+	return false
+
+func restricted_move(place):
+	# Check the licorice pieces
+	if is_in_array(lock_spaces, place):
+		return true
+	return false
+
+func is_in_array(array, item):
+	for i in array.size():
+		if array[i] == item:
 			return true
 	return false
 
@@ -74,7 +89,7 @@ func make_2d_array():
 func spawn_pieces():
 	for i in width:
 		for j in height:
-			if !restricted_movement(Vector2(i, j)):
+			if !restricted_fill(Vector2(i, j)):
 				# Choose a random number and store it
 				var rand = floor(rand_range(0, possible_pieces.size()))
 				var piece = possible_pieces[rand].instance()
@@ -91,6 +106,10 @@ func spawn_pieces():
 func spawn_ice():
 	for i in ice_spaces.size():
 		emit_signal("make_ice", ice_spaces[i])
+		
+func spawn_locks():
+	for i in lock_spaces.size():
+		emit_signal("make_lock", lock_spaces[i])
 
 func match_at(i, j, color):
 	if i > 1:
@@ -122,29 +141,29 @@ func is_in_grid(grid_position):
 	return false
 
 func touch_input():
-	if !restricted_movement(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)):
-		if Input.is_action_just_pressed("ui_touch"):
-			if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)):
-				first_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
-				controlling = true
-		if Input.is_action_just_released("ui_touch"):
-			if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)) && controlling:
-				controlling = false
-				final_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
-				touch_difference(first_touch, final_touch)
+	if Input.is_action_just_pressed("ui_touch"):
+		if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)):
+			first_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
+			controlling = true
+	if Input.is_action_just_released("ui_touch"):
+		if is_in_grid(pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)) && controlling:
+			controlling = false
+			final_touch = pixel_to_grid(get_global_mouse_position().x, get_global_mouse_position().y)
+			touch_difference(first_touch, final_touch)
 
 func swap_pieces(column, row, direction):
 	var first_piece = all_pieces[column][row]
 	var other_piece = all_pieces[column + direction.x][row + direction.y]
-	state = wait
 	if first_piece != null && other_piece != null:
-		store_info(first_piece, other_piece, Vector2(column, row), direction)
-		all_pieces[column][row] = other_piece
-		all_pieces[column + direction.x][row + direction.y] = first_piece
-		first_piece.move(grid_to_pixel(column + direction.x, row + direction.y))
-		other_piece.move(grid_to_pixel(column, row))
-		if !move_checked:
-			find_matches()
+		if !restricted_move(Vector2(column, row)) and !restricted_move(Vector2(column, row) + direction):
+			store_info(first_piece, other_piece, Vector2(column, row), direction)
+			state = wait
+			all_pieces[column][row] = other_piece
+			all_pieces[column + direction.x][row + direction.y] = first_piece
+			first_piece.move(grid_to_pixel(column + direction.x, row + direction.y))
+			other_piece.move(grid_to_pixel(column, row))
+			if !move_checked:
+				find_matches()
 
 func store_info(first_piece, other_piece, place, direction):
 	piece_one = first_piece
@@ -185,24 +204,28 @@ func find_matches():
 			if all_pieces[i][j] != null:
 				var current_color = all_pieces[i][j].color
 				if i > 0  && i < width - 1:
-					if all_pieces[i - 1][j] != null && all_pieces[i + 1][j] != null:
+					if !is_piece_null(i - 1, j) && !is_piece_null(i + 1, j):
 						if all_pieces[i - 1][j].color == current_color && all_pieces[i + 1][j].color == current_color:
-							all_pieces[i - 1][j].matched = true
-							all_pieces[i - 1][j].dim()
-							all_pieces[i][j].matched = true
-							all_pieces[i][j].dim()
-							all_pieces[i + 1][j].matched = true
-							all_pieces[i + 1][j].dim()
+							match_and_dim(all_pieces[i - 1][j])
+							match_and_dim(all_pieces[i][j])
+							match_and_dim(all_pieces[i+1][j])
 				if j > 0  && j < height - 1:
-					if all_pieces[i][j - 1] != null && all_pieces[i][j + 1] != null:
+					if !is_piece_null(i, j - 1) && !is_piece_null(i, j + 1):
 						if all_pieces[i][j - 1].color == current_color && all_pieces[i][j + 1].color == current_color:
-							all_pieces[i][j - 1].matched = true
-							all_pieces[i][j - 1].dim()
-							all_pieces[i][j].matched = true
-							all_pieces[i][j].dim()
-							all_pieces[i][j + 1].matched = true
-							all_pieces[i][j + 1].dim()
+							match_and_dim(all_pieces[i][j - 1])
+							match_and_dim(all_pieces[i][j])
+							match_and_dim(all_pieces[i][j + 1])
 	get_parent().get_node("destroy_timer").start()
+
+
+func is_piece_null(column, row):
+	if all_pieces[column][row] == null:
+		return true
+	return false 
+
+func match_and_dim(item):
+	item.matched = true
+	item.dim()
 
 func destroy_matched():
 	var was_matched = false
@@ -210,7 +233,7 @@ func destroy_matched():
 		for j in height:
 			if all_pieces[i][j] != null:
 				if all_pieces[i][j].matched:
-					emit_signal("damage_ice", Vector2(i, j))
+					damage_special(i, j)
 					was_matched = true
 					all_pieces[i][j].queue_free()
 					all_pieces[i][j] = null
@@ -220,10 +243,14 @@ func destroy_matched():
 	else:
 		swap_back()
 
+func damage_special(column, row):
+	emit_signal("damage_ice", Vector2(column, row))
+	emit_signal("damage_lock", Vector2(column, row))
+
 func collapse_columns():
 	for i in width:
 		for j in height:
-			if all_pieces[i][j] == null && !restricted_movement(Vector2(i,j)):
+			if all_pieces[i][j] == null && !restricted_fill(Vector2(i,j)):
 				for k in range(j + 1, height):
 					if all_pieces[i][k] != null:
 						all_pieces[i][k].move(grid_to_pixel(i, j))
@@ -235,7 +262,7 @@ func collapse_columns():
 func refill_columns():
 	for i in width:
 		for j in height:
-			if all_pieces[i][j] == null && !restricted_movement(Vector2(i,j)):
+			if all_pieces[i][j] == null && !restricted_fill(Vector2(i,j)):
 				var rand = floor(rand_range(0, possible_pieces.size()))
 				var piece = possible_pieces[rand].instance()
 				var loops = 0
@@ -269,3 +296,7 @@ func _on_collapse_timer_timeout():
 func _on_refill_timer_timeout():
 	refill_columns()
 
+func _on_lock_holder_remove_lock(place):
+	for i in range(lock_spaces.size() - 1, -1, -1):
+		if lock_spaces[i] == place:
+			lock_spaces.remove(i)

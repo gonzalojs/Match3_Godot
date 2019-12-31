@@ -1,7 +1,7 @@
 extends Node2D
 
 # It only needs to keep track of how much healt it has
-export (int) var health
+export (int) var health = 1
 
 
 # Called when the node enters the scene tree for the first time.
